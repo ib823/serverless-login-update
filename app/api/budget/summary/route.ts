@@ -19,7 +19,7 @@ function last24HourKeys(name: MetricName, now = new Date()) {
 }
 async function sum24h(name: MetricName) {
   const keys = last24HourKeys(name);
-  const vals = await redis.mget<number[]>(...keys as any);
+  const vals = await redis.mget(...(keys as any));
   return (vals || []).reduce((a: number, v: any) => a + (Number(v)||0), 0);
 }
 
