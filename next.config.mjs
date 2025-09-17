@@ -2,7 +2,7 @@
 const nextConfig = {
   output: 'standalone',
   experimental: {
-    allowedDevOrigins: ['https://*.app.github.dev'],
+    // Add valid experimental options here if needed
   },
 };
 export default nextConfig;

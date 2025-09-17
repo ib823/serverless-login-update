@@ -18,8 +18,7 @@
     "jose": "^5.9.3",
     "next": "latest",
     "react": "latest",
-    "react-dom": "latest",
-    "uuid": "^9.0.1"
+    "react-dom": "latest"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.13",
@@ -27,7 +26,6 @@
     "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
-    "@types/uuid": "^11.0.0",
     "autoprefixer": "^10.4.21",
     "eslint": "latest",
     "postcss": "latest",

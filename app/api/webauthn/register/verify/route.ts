@@ -5,7 +5,7 @@ import { verifyRegResponseWrap, rpFromRequest } from '@/lib/auth/webauthn';
 import { getUser, createUser, updateUser, popChallenge, createSession } from '@/lib/db/operations';
 import { audit } from '@/lib/security/audit';
 import { rateLimiter } from '@/lib/security';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'node:crypto';
 import { serialize } from 'cookie';
 import { track } from '@/lib/metrics/track';
 
@@ -43,16 +43,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Registration failed' }, { status: 400 });
     }
 
-    const { credential } = verification.registrationInfo;
+    const { credential, credentialDeviceType, credentialBackedUp } = verification.registrationInfo;
     const credId = Buffer.from(credential.id).toString('base64url');
     const pubKey = Buffer.from(credential.publicKey).toString('base64url');
     const counter = credential.counter || 0;
-    const aaguid = credential.aaguid ? Buffer.from(credential.aaguid).toString('hex') : undefined;
+    
+    // Extract aaguid from the credential if available (some implementations don't provide it)
+    let aaguid: string | undefined;
+    try {
+      // The aaguid might be available in different ways depending on the authenticator
+      if ((credential as any).aaguid) {
+        aaguid = Buffer.from((credential as any).aaguid).toString('hex');
+      }
+    } catch (e) {
+      // aaguid is optional, so we continue without it
+      aaguid = undefined;
+    }
 
     let user = await getUser(em);
     if (!user) {
-      user = { userId: uuidv4(), email: em, credentials: [], createdAt: Date.now() } as any;
-      await createUser(user);
+      const newUser = { userId: randomUUID(), email: em, credentials: [], createdAt: Date.now() } as any;
+      await createUser(newUser);
+      user = newUser;
     }
 
     if (!user.credentials.some(c => c.credId === credId)) {
@@ -61,6 +73,8 @@ export async function POST(request: NextRequest) {
         publicKey: pubKey,
         counter,
         transports: response?.response?.transports,
+        credentialDeviceType,
+        credentialBackedUp,
         aaguid,
         friendlyName: `Passkey ${user.credentials.length + 1}`,
         createdAt: Date.now(),
