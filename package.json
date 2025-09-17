@@ -27,6 +27,7 @@
     "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
+    "@types/uuid": "^11.0.0",
     "autoprefixer": "^10.4.21",
     "eslint": "latest",
     "postcss": "latest",
