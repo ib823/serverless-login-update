@@ -9,9 +9,15 @@ import { v4 as uuidv4 } from 'uuid';
 import { serialize } from 'cookie';
 import { track } from '@/lib/metrics/track';
 
-async function popAnyChallenge(email: string) {
+async function popAnyRegisterChallenge(email: string) {
   const e = email.toLowerCase();
-  return (await popChallenge(`register:${e}`)) || (await popChallenge(`reg:${e}`));
+  // Try all possible challenge keys
+  const keys = [`register:${e}`, `reg:${e}`];
+  for (const key of keys) {
+    const challenge = await popChallenge(key);
+    if (challenge) return challenge;
+  }
+  return null;
 }
 
 export async function POST(request: NextRequest) {
@@ -26,7 +32,7 @@ export async function POST(request: NextRequest) {
     const em = String(email || '').trim().toLowerCase();
     if (!em || !response) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
 
-    const challenge = await popAnyChallenge(em);
+    const challenge = await popAnyRegisterChallenge(em);
     if (!challenge) return NextResponse.json({ error: 'Challenge expired or not found' }, { status: 400 });
 
     const rp = rpFromRequest(request);
@@ -77,7 +83,7 @@ export async function POST(request: NextRequest) {
   } catch (e: any) {
     const msg = e?.message || 'unknown';
     const cause = e?.cause?.message || undefined;
-    console.error('[register/verify] ERROR:', msg, cause, e?.stack); // <-- dev log
+    console.error('[register/verify] ERROR:', msg, cause);
     const body = process.env.NODE_ENV === 'production'
       ? { error: 'Internal server error' }
       : { error: 'Internal server error', detail: msg, cause };

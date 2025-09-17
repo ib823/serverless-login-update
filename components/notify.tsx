@@ -1,39 +1,74 @@
 'use client';
-import React, { useEffect, useState } from 'react';
 
-type Kind = 'success' | 'error' | 'info';
-type Notice = { id: number; kind: Kind; text: string };
-type Listener = (n: Notice) => void;
+import { useEffect, useState } from 'react';
 
-const listeners: Listener[] = [];
-function emit(n: Notice) { for (const l of listeners) l(n); }
-function id() { return Date.now() + Math.random(); }
+type Toast = {
+  id: number;
+  type: 'success' | 'error' | 'info';
+  message: string;
+};
+
+const toasts: Toast[] = [];
+const listeners: ((toasts: Toast[]) => void)[] = [];
+
+const emit = () => listeners.forEach(l => l([...toasts]));
 
 export const notify = {
-  success(text: string) { emit({ id: id(), kind: 'success', text }); },
-  error(text: string)   { emit({ id: id(), kind: 'error',   text }); },
-  info(text: string)    { emit({ id: id(), kind: 'info',    text }); },
+  success: (message: string) => {
+    const toast = { id: Date.now(), type: 'success' as const, message };
+    toasts.push(toast);
+    emit();
+    setTimeout(() => {
+      const idx = toasts.findIndex(t => t.id === toast.id);
+      if (idx >= 0) {
+        toasts.splice(idx, 1);
+        emit();
+      }
+    }, 3000);
+  },
+  error: (message: string) => {
+    const toast = { id: Date.now(), type: 'error' as const, message };
+    toasts.push(toast);
+    emit();
+    setTimeout(() => {
+      const idx = toasts.findIndex(t => t.id === toast.id);
+      if (idx >= 0) {
+        toasts.splice(idx, 1);
+        emit();
+      }
+    }, 3000);
+  },
+  info: (message: string) => {
+    const toast = { id: Date.now(), type: 'info' as const, message };
+    toasts.push(toast);
+    emit();
+    setTimeout(() => {
+      const idx = toasts.findIndex(t => t.id === toast.id);
+      if (idx >= 0) {
+        toasts.splice(idx, 1);
+        emit();
+      }
+    }, 3000);
+  }
 };
 
 export function Notifier() {
-  const [items, setItems] = useState<Notice[]>([]);
+  const [items, setItems] = useState<Toast[]>([]);
+
   useEffect(() => {
-    const h: Listener = (n) => {
-      setItems(prev => [n, ...prev].slice(0, 3));
-      setTimeout(() => setItems(prev => prev.filter(i => i.id !== n.id)), 3200);
+    const handler = (toasts: Toast[]) => setItems(toasts);
+    listeners.push(handler);
+    return () => {
+      const idx = listeners.indexOf(handler);
+      if (idx >= 0) listeners.splice(idx, 1);
     };
-    listeners.push(h);
-    return () => { const i = listeners.indexOf(h); if (i >= 0) listeners.splice(i, 1); };
   }, []);
+
   return (
-    <div aria-live="polite" aria-atomic="true" className="toaster">
-      {items.map(n => (
-        <div
-          key={n.id}
-          role={n.kind === 'error' ? 'alert' : 'status'}
-          className={`notice ${n.kind} toast-enter`}
-        >
-          {n.text}
+    <div className="toasts" aria-live="polite">
+      {items.map(toast => (
+        <div key={toast.id} className={`toast ${toast.type}`}>
+          {toast.message}
         </div>
       ))}
     </div>

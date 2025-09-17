@@ -1,17 +1,29 @@
+import type { Metadata } from 'next';
 import './globals.css';
 import { Notifier } from '@/components/notify';
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export const metadata: Metadata = {
+  title: 'Authentication',
+  description: 'Passwordless authentication',
+};
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="en">
+      <head>
+        <style dangerouslySetInnerHTML={{ __html: `
+          /* Hide Next.js debug tools */
+          nextjs-portal, [id^="__next"], [class*="nextjs"] { 
+            display: none !important; 
+          }
+        `}} />
+      </head>
       <body>
-        <main className="container">
-          <div className="nav">
-            <div className="brand">Passkeys IdP</div>
-            <a className="link" href="/account">Account</a>
-          </div>
-          {children}
-        </main>
+        {children}
         <Notifier />
       </body>
     </html>

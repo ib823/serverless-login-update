@@ -8,9 +8,14 @@ import { rateLimiter } from '@/lib/security';
 import { serialize } from 'cookie';
 import { track } from '@/lib/metrics/track';
 
-async function popAnyChallenge(email: string) {
+async function popAnyAuthChallenge(email: string) {
   const e = email.toLowerCase();
-  return (await popChallenge(`auth:${e}`)) || (await popChallenge(`authenticate:${e}`));
+  const keys = [`auth:${e}`, `authenticate:${e}`];
+  for (const key of keys) {
+    const challenge = await popChallenge(key);
+    if (challenge) return challenge;
+  }
+  return null;
 }
 
 export async function POST(request: NextRequest) {
@@ -32,7 +37,7 @@ export async function POST(request: NextRequest) {
     const cred = user.credentials.find(c => c.credId === credId);
     if (!cred) return NextResponse.json({ error: 'Credential not found' }, { status: 400 });
 
-    const challenge = await popAnyChallenge(em);
+    const challenge = await popAnyAuthChallenge(em);
     if (!challenge) return NextResponse.json({ error: 'Challenge expired or not found' }, { status: 400 });
 
     const rp = rpFromRequest(request);

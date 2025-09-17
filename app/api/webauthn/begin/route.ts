@@ -15,22 +15,39 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json().catch(() => ({}));
   const email = String(body?.email || '').trim().toLowerCase();
-  const forceMode = String(body?.forceMode || '').toLowerCase(); // 'register' to force new passkey
-  if (!email || !email.includes('@')) return NextResponse.json({ error: 'Invalid email' }, { status: 400 });
+  const forceMode = String(body?.forceMode || '').toLowerCase();
+  
+  if (!email || !email.includes('@')) {
+    return NextResponse.json({ error: 'Invalid email' }, { status: 400 });
+  }
 
   const rp = rpFromRequest(request);
   const existing = await getUser(email);
   const mode = forceMode === 'register' ? 'register' : (existing ? 'auth' : 'register');
 
-  const userForReg = existing ?? { userId: crypto.randomUUID(), email, credentials: [], createdAt: Date.now() } as any;
-  // IMPORTANT: generateAuthOptionsJSON omits allowCredentials to enable discoverable/QR sign-in
+  const userForReg = existing ?? { 
+    userId: crypto.randomUUID(), 
+    email, 
+    credentials: [], 
+    createdAt: Date.now() 
+  } as any;
+
   const options = mode === 'auth'
     ? generateAuthOptionsJSON(existing, rp.rpID)
     : generateRegOptionsJSON(userForReg, rp.rpID, rp.rpName);
 
-  await setChallenge(`${mode}:${email}`, options.challenge);
-  if (mode === 'register') await setChallenge(`reg:${email}`, options.challenge);
-  if (mode === 'auth') await setChallenge(`auth:${email}`, options.challenge);
+  // Store challenge with all possible keys for compatibility
+  const challengeValue = options.challenge;
+  await setChallenge(`${mode}:${email}`, challengeValue);
+  
+  // Also store with both register variations for compatibility
+  if (mode === 'register') {
+    await setChallenge(`register:${email}`, challengeValue);
+    await setChallenge(`reg:${email}`, challengeValue);
+  } else {
+    await setChallenge(`auth:${email}`, challengeValue);
+    await setChallenge(`authenticate:${email}`, challengeValue);
+  }
 
   await track('auth.begin');
   await track(mode === 'auth' ? 'auth.options' : 'reg.options');
