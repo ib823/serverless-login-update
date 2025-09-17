@@ -1,9 +1,14 @@
-import crypto from 'crypto';
+import { randomBytes } from 'node:crypto';
 import { 
   generateRegistrationOptions,
   generateAuthenticationOptions,
   verifyRegistrationResponse, 
-  verifyAuthenticationResponse 
+  verifyAuthenticationResponse
+} from '@simplewebauthn/server';
+import type { 
+  GenerateRegistrationOptionsOpts,
+  GenerateAuthenticationOptionsOpts,
+  AuthenticatorTransportFuture
 } from '@simplewebauthn/server';
 import type { User } from '@/lib/types';
 
@@ -26,20 +31,21 @@ export function rpFromRequest(req: Request | { headers: Headers; url: string }) 
   return { rpID, rpName, origin };
 }
 
-// Standardized registration options using @simplewebauthn library
-export function generateRegOptions(user: User, rpID: string, rpName: string) {
+// FIXED: Correct types for @simplewebauthn/server
+export async function generateRegOptions(user: User, rpID: string, rpName: string) {
   const userIDBuffer = new TextEncoder().encode(user.userId);
-  return generateRegistrationOptions({
+  
+  const opts: GenerateRegistrationOptionsOpts = {
     rpID, 
     rpName,
     userID: userIDBuffer,
     userName: user.email,
     userDisplayName: user.email.split('@')[0],
     attestationType: 'none',
+    // FIXED: excludeCredentials expects { id: string, transports?: AuthenticatorTransportFuture[] }
     excludeCredentials: (user.credentials || []).map(cred => ({
-      id: Buffer.from(cred.credId, 'base64url'),
-      type: 'public-key' as const,
-      transports: cred.transports as any,
+      id: cred.credId, // Already a string, no Buffer conversion needed
+      transports: cred.transports as AuthenticatorTransportFuture[],
     })),
     authenticatorSelection: {
       residentKey: 'preferred',
@@ -47,21 +53,25 @@ export function generateRegOptions(user: User, rpID: string, rpName: string) {
     },
     supportedAlgorithmIDs: [-7, -257, -8],
     timeout: 60000,
-  });
+  };
+  
+  return await generateRegistrationOptions(opts);
 }
 
-// Standardized authentication options using @simplewebauthn library
-export function generateAuthOptions(user: User | null, rpID: string) {
-  return generateAuthenticationOptions({
+// FIXED: Correct types for @simplewebauthn/server
+export async function generateAuthOptions(user: User | null, rpID: string) {
+  const opts: GenerateAuthenticationOptionsOpts = {
     rpID,
+    // FIXED: allowCredentials expects { id: string, transports?: AuthenticatorTransportFuture[] }
     allowCredentials: user ? user.credentials.map(cred => ({
-      id: Buffer.from(cred.credId, 'base64url'),
-      type: 'public-key' as const,
-      transports: cred.transports as any,
+      id: cred.credId, // Already a string, no Buffer conversion needed
+      transports: cred.transports as AuthenticatorTransportFuture[],
     })) : undefined,
     userVerification: 'preferred',
     timeout: 60000,
-  });
+  };
+  
+  return await generateAuthenticationOptions(opts);
 }
 
 // Standardized registration verification

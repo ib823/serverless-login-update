@@ -8,7 +8,8 @@ import { rateLimiter } from '@/lib/security';
 import { randomUUID } from 'node:crypto';
 import { serialize } from 'cookie';
 import { track } from '@/lib/metrics/track';
-import type { User } from '@/lib/types';
+import type { User, Credential } from '@/lib/types';
+import type { AuthenticatorTransportFuture } from '@simplewebauthn/server';
 
 async function popAnyRegisterChallenge(email: string) {
   const e = email.toLowerCase();
@@ -61,18 +62,21 @@ export async function POST(request: NextRequest) {
     }
 
     if (!user.credentials.some(c => c.credId === credId)) {
-      user.credentials.push({
+      // FIXED: Ensure proper typing for credentials
+      const newCredential: Credential = {
         credId: credId,
         publicKey: pubKey,
         counter,
-        transports: response?.response?.transports,
+        transports: response?.response?.transports as AuthenticatorTransportFuture[],
         credentialDeviceType: verification.credentialDeviceType,
         credentialBackedUp: verification.credentialBackedUp,
         aaguid: verification.aaguid,
         friendlyName: `Passkey ${user.credentials.length + 1}`,
         createdAt: Date.now(),
         lastUsedAt: Date.now(),
-      });
+      };
+      
+      user.credentials.push(newCredential);
       await updateUser(user);
     }
 

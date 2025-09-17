@@ -32,9 +32,10 @@ export async function POST(request: NextRequest) {
     createdAt: Date.now() 
   } as any;
 
+  // FIXED: Properly await the async functions
   const options = mode === 'auth'
-    ? generateAuthOptions(existing, rp.rpID)
-    : generateRegOptions(userForReg, rp.rpID, rp.rpName);
+    ? await generateAuthOptions(existing, rp.rpID)
+    : await generateRegOptions(userForReg, rp.rpID, rp.rpName);
 
   // Store challenge with all possible keys for compatibility
   const challengeValue = options.challenge;
