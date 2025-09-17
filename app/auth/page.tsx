@@ -2,11 +2,11 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { startRegistration, startAuthentication } from '@simplewebauthn/browser';
-import { notify } from '@/components/notify';
 
 export default function AuthPage() {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState<{type: 'error' | 'success' | null, message: string}>({type: null, message: ''});
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -25,6 +25,7 @@ export default function AuthPage() {
     if (!normalized.includes('@') || loading) return;
 
     setLoading(true);
+    setStatus({type: null, message: ''});
     localStorage.setItem('lastEmail', normalized);
 
     try {
@@ -49,7 +50,7 @@ export default function AuthPage() {
 
         if (!verifyResp.ok) throw new Error('Registration failed');
         
-        notify.success('Account created');
+        setStatus({type: 'success', message: 'Redirecting...'});
         setTimeout(() => window.location.replace('/account'), 500);
         
       } else {
@@ -63,24 +64,25 @@ export default function AuthPage() {
 
         if (!verifyResp.ok) throw new Error('Authentication failed');
         
-        notify.success('Authenticated');
+        setStatus({type: 'success', message: 'Redirecting...'});
         setTimeout(() => window.location.replace('/account'), 500);
       }
     } catch (err: any) {
       setLoading(false);
       
       if (err.name === 'AbortError' || err.message?.includes('aborted')) {
+        setStatus({type: null, message: ''});
         return;
       }
       
       if (err.name === 'NotAllowedError') {
-        notify.error('Security key unavailable');
+        setStatus({type: 'error', message: 'Security key not available. Try another browser.'});
       } else if (err.name === 'NotSupportedError') {
-        notify.error('Browser not supported');
+        setStatus({type: 'error', message: 'This browser doesn\'t support passkeys.'});
       } else if (err.message?.includes('Network')) {
-        notify.error('Connection failed');
+        setStatus({type: 'error', message: 'Connection failed. Please try again.'});
       } else {
-        notify.error('Authentication failed');
+        setStatus({type: 'error', message: 'Authentication failed. Please try again.'});
       }
     }
   };
@@ -98,10 +100,13 @@ export default function AuthPage() {
         <input
           ref={inputRef}
           type="email"
-          className="input"
+          className={`input ${status.type === 'error' ? 'error' : ''}`}
           placeholder="Enter your email"
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          onChange={(e) => {
+            setEmail(e.target.value);
+            if (status.type) setStatus({type: null, message: ''});
+          }}
           onKeyPress={handleKeyPress}
           disabled={loading}
           autoComplete="username webauthn"
@@ -111,16 +116,16 @@ export default function AuthPage() {
         />
         
         <button 
-          className="btn" 
+          className={`btn ${loading ? 'loading' : ''}`}
           onClick={authenticate}
           disabled={loading || !email.includes('@')}
         >
-          {loading ? (
-            <>Authenticating<span className="spinner"/></>
-          ) : (
-            'Continue'
-          )}
+          {loading ? '' : 'Continue'}
         </button>
+
+        <div className={`status-message ${status.type || ''}`}>
+          {status.message || '\u00A0'}
+        </div>
       </div>
     </div>
   );

@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { notify } from '@/components/notify';
 
 export default function AccountPage() {
   const [session, setSession] = useState<any>(null);
@@ -23,16 +22,11 @@ export default function AccountPage() {
 
   const signOut = async () => {
     await fetch('/api/logout', { method: 'POST' });
-    notify.info('Signed out');
     window.location.replace('/auth');
   };
 
   if (loading) {
-    return (
-      <div className="container">
-        <div className="spinner" style={{ borderColor: 'rgba(0,0,0,0.1)', borderTopColor: '#000' }}/>
-      </div>
-    );
+    return <div className="container" />;
   }
 
   return (
