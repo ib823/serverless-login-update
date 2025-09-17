@@ -1,8 +1,8 @@
 export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
-import crypto from 'crypto';
+import { randomUUID } from 'node:crypto';
 import { getUser, setChallenge } from '@/lib/db/operations';
-import { generateRegOptionsJSON, generateAuthOptionsJSON, rpFromRequest } from '@/lib/auth/webauthn';
+import { generateRegOptions, generateAuthOptions, rpFromRequest } from '@/lib/auth/webauthn';
 import { rateLimiter } from '@/lib/security';
 import { track } from '@/lib/metrics/track';
 
@@ -26,15 +26,15 @@ export async function POST(request: NextRequest) {
   const mode = forceMode === 'register' ? 'register' : (existing ? 'auth' : 'register');
 
   const userForReg = existing ?? { 
-    userId: crypto.randomUUID(), 
+    userId: randomUUID(), 
     email, 
     credentials: [], 
     createdAt: Date.now() 
   } as any;
 
   const options = mode === 'auth'
-    ? generateAuthOptionsJSON(existing, rp.rpID)
-    : generateRegOptionsJSON(userForReg, rp.rpID, rp.rpName);
+    ? generateAuthOptions(existing, rp.rpID)
+    : generateRegOptions(userForReg, rp.rpID, rp.rpName);
 
   // Store challenge with all possible keys for compatibility
   const challengeValue = options.challenge;

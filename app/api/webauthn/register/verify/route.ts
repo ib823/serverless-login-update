@@ -1,13 +1,14 @@
 export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyRegResponseWrap, rpFromRequest } from '@/lib/auth/webauthn';
+import { verifyRegResponse, rpFromRequest } from '@/lib/auth/webauthn';
 import { getUser, createUser, updateUser, popChallenge, createSession } from '@/lib/db/operations';
 import { audit } from '@/lib/security/audit';
 import { rateLimiter } from '@/lib/security';
 import { randomUUID } from 'node:crypto';
 import { serialize } from 'cookie';
 import { track } from '@/lib/metrics/track';
+import type { User } from '@/lib/types';
 
 async function popAnyRegisterChallenge(email: string) {
   const e = email.toLowerCase();
@@ -36,33 +37,25 @@ export async function POST(request: NextRequest) {
     if (!challenge) return NextResponse.json({ error: 'Challenge expired or not found' }, { status: 400 });
 
     const rp = rpFromRequest(request);
-    const verification = await verifyRegResponseWrap(response, challenge, rp.origin, rp.rpID);
+    const verification = await verifyRegResponse(response, challenge, rp.origin, rp.rpID);
 
-    if (!verification?.verified || !verification.registrationInfo) {
+    if (!verification?.verified) {
       await audit({ type: 'register_failure', userId: em, ip, metadata: { reason: 'verification_failed' } });
       return NextResponse.json({ error: 'Registration failed' }, { status: 400 });
     }
 
-    const { credential, credentialDeviceType, credentialBackedUp } = verification.registrationInfo;
-    const credId = Buffer.from(credential.id).toString('base64url');
-    const pubKey = Buffer.from(credential.publicKey).toString('base64url');
-    const counter = credential.counter || 0;
+    const credId = verification.credentialID!;
+    const pubKey = verification.credentialPublicKey!;
+    const counter = verification.counter!;
     
-    // Extract aaguid from the credential if available (some implementations don't provide it)
-    let aaguid: string | undefined;
-    try {
-      // The aaguid might be available in different ways depending on the authenticator
-      if ((credential as any).aaguid) {
-        aaguid = Buffer.from((credential as any).aaguid).toString('hex');
-      }
-    } catch (e) {
-      // aaguid is optional, so we continue without it
-      aaguid = undefined;
-    }
-
-    let user = await getUser(em);
+    let user: User | null = await getUser(em);
     if (!user) {
-      const newUser = { userId: randomUUID(), email: em, credentials: [], createdAt: Date.now() } as any;
+      const newUser: User = { 
+        userId: randomUUID(), 
+        email: em, 
+        credentials: [], 
+        createdAt: Date.now() 
+      };
       await createUser(newUser);
       user = newUser;
     }
@@ -73,13 +66,13 @@ export async function POST(request: NextRequest) {
         publicKey: pubKey,
         counter,
         transports: response?.response?.transports,
-        credentialDeviceType,
-        credentialBackedUp,
-        aaguid,
+        credentialDeviceType: verification.credentialDeviceType,
+        credentialBackedUp: verification.credentialBackedUp,
+        aaguid: verification.aaguid,
         friendlyName: `Passkey ${user.credentials.length + 1}`,
         createdAt: Date.now(),
         lastUsedAt: Date.now(),
-      } as any);
+      });
       await updateUser(user);
     }
 

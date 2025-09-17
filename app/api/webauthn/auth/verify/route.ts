@@ -1,7 +1,7 @@
 export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyAuthResponseWrap, rpFromRequest } from '@/lib/auth/webauthn';
+import { verifyAuthResponse, rpFromRequest } from '@/lib/auth/webauthn';
 import { getUser, popChallenge, updateUser, createSession } from '@/lib/db/operations';
 import { audit } from '@/lib/security/audit';
 import { rateLimiter } from '@/lib/security';
@@ -28,29 +28,29 @@ export async function POST(request: NextRequest) {
   try {
     const { email, response } = await request.json();
     const em = String(email || '').trim().toLowerCase();
-    if (!em || !response?.id) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
-
-    const user = await getUser(em);
-    if (!user) return NextResponse.json({ error: 'User not found' }, { status: 400 });
-
-    const credId = String(response.id);
-    const cred = user.credentials.find(c => c.credId === credId);
-    if (!cred) return NextResponse.json({ error: 'Credential not found' }, { status: 400 });
+    if (!em || !response) return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
 
     const challenge = await popAnyAuthChallenge(em);
     if (!challenge) return NextResponse.json({ error: 'Challenge expired or not found' }, { status: 400 });
 
-    const rp = rpFromRequest(request);
-    const verification = await verifyAuthResponseWrap(response, challenge, rp.origin, rp.rpID, cred);
+    const user = await getUser(em);
+    if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
-    if (!verification?.verified || !verification.authenticationInfo) {
+    const credId = Buffer.from(response.id, 'base64url').toString('base64url');
+    const credential = user.credentials.find(c => c.credId === credId);
+    if (!credential) return NextResponse.json({ error: 'Credential not found' }, { status: 404 });
+
+    const rp = rpFromRequest(request);
+    const verification = await verifyAuthResponse(response, challenge, rp.origin, rp.rpID, credential);
+
+    if (!verification?.verified) {
       await audit({ type: 'auth_failure', userId: user.userId, ip, metadata: { reason: 'verification_failed' } });
       return NextResponse.json({ error: 'Authentication failed' }, { status: 400 });
     }
 
-    const { newCounter } = verification.authenticationInfo;
-    if (typeof newCounter === 'number' && newCounter > cred.counter) cred.counter = newCounter;
-    cred.lastUsedAt = Date.now();
+    // Update credential counter and last used time
+    credential.counter = verification.newCounter || credential.counter;
+    credential.lastUsedAt = Date.now();
     await updateUser(user);
 
     const session = { userId: user.userId, email: user.email, createdAt: Date.now(), expiresAt: Date.now() + 3600_000 };
@@ -67,7 +67,10 @@ export async function POST(request: NextRequest) {
   } catch (e: any) {
     const msg = e?.message || 'unknown';
     const cause = e?.cause?.message || undefined;
-    const body = process.env.NODE_ENV === 'production' ? { error: 'Internal server error' } : { error: 'Internal server error', detail: msg, cause };
+    console.error('[auth/verify] ERROR:', msg, cause);
+    const body = process.env.NODE_ENV === 'production'
+      ? { error: 'Internal server error' }
+      : { error: 'Internal server error', detail: msg, cause };
     await audit({ type: 'auth_failure', ip, metadata: { error: msg, cause } });
     return NextResponse.json(body, { status: 500 });
   }

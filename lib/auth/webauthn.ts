@@ -1,5 +1,7 @@
 import crypto from 'crypto';
 import { 
+  generateRegistrationOptions,
+  generateAuthenticationOptions,
   verifyRegistrationResponse, 
   verifyAuthenticationResponse 
 } from '@simplewebauthn/server';
@@ -24,94 +26,84 @@ export function rpFromRequest(req: Request | { headers: Headers; url: string }) 
   return { rpID, rpName, origin };
 }
 
-function b64urlFromStr(s: string) {
-  return Buffer.from(new TextEncoder().encode(s)).toString('base64url');
-}
-
-function newChallenge() {
-  return crypto.randomBytes(32).toString('base64url');
-}
-
-export function generateRegOptionsJSON(user: User, rpID: string, rpName: string) {
-  const challenge = newChallenge();
-  const options = {
-    challenge,
-    rp: { id: rpID, name: rpName },
-    user: { 
-      id: b64urlFromStr(user.userId), 
-      name: user.email, 
-      displayName: user.email.split('@')[0] 
-    },
-    pubKeyCredParams: [
-      { type: 'public-key' as const, alg: -7 },
-      { type: 'public-key' as const, alg: -257 },
-      { type: 'public-key' as const, alg: -8 }
-    ],
-    timeout: 60000,
-    authenticatorSelection: { 
-      residentKey: 'preferred' as const, 
-      userVerification: 'preferred' as const  // Changed from 'required' to 'preferred'
-    },
-    attestation: 'none' as const,
-    excludeCredentials: (user.credentials || []).map(cred => ({ 
-      id: cred.credId, 
-      type: 'public-key' as const, 
-      transports: cred.transports 
+// Standardized registration options using @simplewebauthn library
+export function generateRegOptions(user: User, rpID: string, rpName: string) {
+  const userIDBuffer = new TextEncoder().encode(user.userId);
+  return generateRegistrationOptions({
+    rpID, 
+    rpName,
+    userID: userIDBuffer,
+    userName: user.email,
+    userDisplayName: user.email.split('@')[0],
+    attestationType: 'none',
+    excludeCredentials: (user.credentials || []).map(cred => ({
+      id: Buffer.from(cred.credId, 'base64url'),
+      type: 'public-key' as const,
+      transports: cred.transports as any,
     })),
-  };
-  
-  console.log('[WebAuthn] Registration options:', { rpID, challenge: challenge.substring(0, 10) + '...' });
-  return options;
-}
-
-export function generateAuthOptionsJSON(_user: User | null, rpID: string) {
-  const challenge = newChallenge();
-  const options = {
-    challenge,
-    rpId: rpID,
-    userVerification: 'preferred' as const,  // Changed from 'required' to 'preferred'
+    authenticatorSelection: {
+      residentKey: 'preferred',
+      userVerification: 'preferred',
+    },
+    supportedAlgorithmIDs: [-7, -257, -8],
     timeout: 60000,
-  };
-  
-  console.log('[WebAuthn] Auth options:', { rpID, challenge: challenge.substring(0, 10) + '...' });
-  return options;
+  });
 }
 
-export async function verifyRegResponseWrap(
-  response: any, 
-  expectedChallenge: string, 
-  expectedOrigin: string, 
-  expectedRPID: string
-) {
+// Standardized authentication options using @simplewebauthn library
+export function generateAuthOptions(user: User | null, rpID: string) {
+  return generateAuthenticationOptions({
+    rpID,
+    allowCredentials: user ? user.credentials.map(cred => ({
+      id: Buffer.from(cred.credId, 'base64url'),
+      type: 'public-key' as const,
+      transports: cred.transports as any,
+    })) : undefined,
+    userVerification: 'preferred',
+    timeout: 60000,
+  });
+}
+
+// Standardized registration verification
+export async function verifyRegResponse(response: any, expectedChallenge: string, expectedOrigin: string, expectedRPID: string) {
   console.log('[WebAuthn] Verifying registration:', { 
     expectedRPID, 
     expectedOrigin,
     responseId: response.id?.substring(0, 10) + '...'
   });
   
-  return await verifyRegistrationResponse({ 
-    response, 
-    expectedChallenge, 
-    expectedOrigin: [expectedOrigin], 
-    expectedRPID, 
-    requireUserVerification: false  // Changed from true to false
+  const verification = await verifyRegistrationResponse({
+    response,
+    expectedChallenge,
+    expectedOrigin: [expectedOrigin],
+    expectedRPID,
+    requireUserVerification: false,
   });
+
+  if (verification.verified && verification.registrationInfo) {
+    const { credential, credentialDeviceType, credentialBackedUp } = verification.registrationInfo;
+    return {
+      verified: true,
+      credentialID: Buffer.from(credential.id).toString('base64url'),
+      credentialPublicKey: Buffer.from(credential.publicKey).toString('base64url'),
+      counter: credential.counter || 0,
+      credentialDeviceType,
+      credentialBackedUp,
+      aaguid: credential.aaguid ? Buffer.from(credential.aaguid).toString('hex') : undefined,
+    };
+  }
+  return { verified: false } as const;
 }
 
-export async function verifyAuthResponseWrap(
-  response: any, 
-  expectedChallenge: string, 
-  expectedOrigin: string, 
-  expectedRPID: string, 
-  credential: any
-) {
+// Standardized authentication verification
+export async function verifyAuthResponse(response: any, expectedChallenge: string, expectedOrigin: string, expectedRPID: string, credential: any) {
   console.log('[WebAuthn] Verifying auth:', { 
     expectedRPID, 
     expectedOrigin,
     credId: credential.credId?.substring(0, 10) + '...'
   });
   
-  return await verifyAuthenticationResponse({
+  const verification = await verifyAuthenticationResponse({
     response,
     expectedChallenge,
     expectedOrigin: [expectedOrigin],
@@ -122,6 +114,22 @@ export async function verifyAuthResponseWrap(
       counter: credential.counter,
       transports: credential.transports,
     },
-    requireUserVerification: false  // Changed from true to false
+    requireUserVerification: false,
   });
+
+  if (verification.verified && verification.authenticationInfo) {
+    const { newCounter } = verification.authenticationInfo;
+    // Log only; counters can be non-monotonic with multi-device passkeys
+    if (newCounter > 0 && newCounter <= credential.counter) {
+      console.warn('SECURITY_ALERT: Non-incrementing counter', { credId: credential.credId });
+    }
+    return { verified: true, newCounter } as const;
+  }
+  return { verified: false } as const;
 }
+
+// Backwards compatibility aliases
+export const generateRegOptionsJSON = generateRegOptions;
+export const generateAuthOptionsJSON = generateAuthOptions;
+export const verifyRegResponseWrap = verifyRegResponse;
+export const verifyAuthResponseWrap = verifyAuthResponse;
