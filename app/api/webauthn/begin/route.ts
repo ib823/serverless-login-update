@@ -15,19 +15,19 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json().catch(() => ({}));
   const email = String(body?.email || '').trim().toLowerCase();
-  if (!email || !email.includes('@')) {
-    return NextResponse.json({ error: 'Invalid email' }, { status: 400 });
-  }
+  const forceMode = String(body?.forceMode || '').toLowerCase(); // 'register' to force new passkey
+  if (!email || !email.includes('@')) return NextResponse.json({ error: 'Invalid email' }, { status: 400 });
 
   const rp = rpFromRequest(request);
-  const user = await getUser(email);
-  const mode = user ? 'auth' : 'register' as const;
+  const existing = await getUser(email);
+  const mode = forceMode === 'register' ? 'register' : (existing ? 'auth' : 'register');
 
+  const userForReg = existing ?? { userId: crypto.randomUUID(), email, credentials: [], createdAt: Date.now() } as any;
+  // IMPORTANT: generateAuthOptionsJSON omits allowCredentials to enable discoverable/QR sign-in
   const options = mode === 'auth'
-    ? generateAuthOptionsJSON(user, rp.rpID)
-    : generateRegOptionsJSON({ userId: crypto.randomUUID(), email, credentials: [], createdAt: Date.now() } as any, rp.rpID, rp.rpName);
+    ? generateAuthOptionsJSON(existing, rp.rpID)
+    : generateRegOptionsJSON(userForReg, rp.rpID, rp.rpName);
 
-  // Store challenge under both prefixes to avoid drift
   await setChallenge(`${mode}:${email}`, options.challenge);
   if (mode === 'register') await setChallenge(`reg:${email}`, options.challenge);
   if (mode === 'auth') await setChallenge(`auth:${email}`, options.challenge);
