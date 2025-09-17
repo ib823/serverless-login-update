@@ -30,18 +30,18 @@ export async function POST(request: NextRequest) {
     email, 
     credentials: [], 
     createdAt: Date.now() 
-  } as any;
+  };
 
-  // FIXED: Properly await the async functions
+  // NO await - these are synchronous functions in v10+
   const options = mode === 'auth'
-    ? await generateAuthOptions(existing, rp.rpID)
-    : await generateRegOptions(userForReg, rp.rpID, rp.rpName);
+    ? generateAuthOptions(existing, rp.rpID)
+    : generateRegOptions(userForReg, rp.rpID, rp.rpName);
 
-  // Store challenge with all possible keys for compatibility
+  // Store challenge
   const challengeValue = options.challenge;
   await setChallenge(`${mode}:${email}`, challengeValue);
   
-  // Also store with both register variations for compatibility
+  // Store with multiple keys for compatibility
   if (mode === 'register') {
     await setChallenge(`register:${email}`, challengeValue);
     await setChallenge(`reg:${email}`, challengeValue);

@@ -9,11 +9,9 @@ import { randomUUID } from 'node:crypto';
 import { serialize } from 'cookie';
 import { track } from '@/lib/metrics/track';
 import type { User, Credential } from '@/lib/types';
-import type { AuthenticatorTransportFuture } from '@simplewebauthn/server';
 
 async function popAnyRegisterChallenge(email: string) {
   const e = email.toLowerCase();
-  // Try all possible challenge keys
   const keys = [`register:${e}`, `reg:${e}`];
   for (const key of keys) {
     const challenge = await popChallenge(key);
@@ -62,12 +60,11 @@ export async function POST(request: NextRequest) {
     }
 
     if (!user.credentials.some(c => c.credId === credId)) {
-      // FIXED: Ensure proper typing for credentials
       const newCredential: Credential = {
         credId: credId,
         publicKey: pubKey,
         counter,
-        transports: response?.response?.transports as AuthenticatorTransportFuture[],
+        transports: response?.response?.transports || [],
         credentialDeviceType: verification.credentialDeviceType,
         credentialBackedUp: verification.credentialBackedUp,
         aaguid: verification.aaguid,

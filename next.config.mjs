@@ -2,7 +2,7 @@
 const nextConfig = {
   output: 'standalone',
   experimental: {
-    // Add valid experimental options here if needed
+    // Valid experimental options only
   },
 };
 export default nextConfig;

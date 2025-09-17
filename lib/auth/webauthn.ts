@@ -1,27 +1,20 @@
-import { randomBytes } from 'node:crypto';
-import { 
+import {
   generateRegistrationOptions,
   generateAuthenticationOptions,
-  verifyRegistrationResponse, 
-  verifyAuthenticationResponse
-} from '@simplewebauthn/server';
-import type { 
-  GenerateRegistrationOptionsOpts,
-  GenerateAuthenticationOptionsOpts,
-  AuthenticatorTransportFuture
+  verifyRegistrationResponse,
+  verifyAuthenticationResponse,
 } from '@simplewebauthn/server';
 import type { User } from '@/lib/types';
+import { SECURITY_CONFIG } from '@/lib/config/security';
 
 export function rpFromRequest(req: Request | { headers: Headers; url: string }) {
   const headers = (req as any).headers as Headers;
   const get = (k: string) => typeof headers?.get === 'function' ? headers.get(k) : undefined;
   const url = new URL((req as any).url);
   
-  // Get the actual host from the request
   const proto = (get('x-forwarded-proto') || url.protocol.replace(':', '')).toLowerCase();
   const host = (get('x-forwarded-host') || get('host') || url.host);
   
-  // Strip port for RP ID
   const rpID = host.replace(/:\d+$/, '');
   const origin = `${proto}://${host}`;
   const rpName = process.env.RP_NAME || 'Passkeys IdP';
@@ -31,50 +24,48 @@ export function rpFromRequest(req: Request | { headers: Headers; url: string }) 
   return { rpID, rpName, origin };
 }
 
-// FIXED: Correct types for @simplewebauthn/server
-export async function generateRegOptions(user: User, rpID: string, rpName: string) {
+// IMPORTANT: These functions are SYNCHRONOUS in @simplewebauthn/server v10+
+export function generateRegOptions(user: User, rpID: string, rpName: string) {
   const userIDBuffer = new TextEncoder().encode(user.userId);
   
-  const opts: GenerateRegistrationOptionsOpts = {
-    rpID, 
+  // The library expects credential IDs as strings, NOT Buffers!
+  return generateRegistrationOptions({
+    rpID,
     rpName,
     userID: userIDBuffer,
     userName: user.email,
     userDisplayName: user.email.split('@')[0],
-    attestationType: 'none',
-    // FIXED: excludeCredentials expects { id: string, transports?: AuthenticatorTransportFuture[] }
-    excludeCredentials: (user.credentials || []).map(cred => ({
-      id: cred.credId, // Already a string, no Buffer conversion needed
-      transports: cred.transports as AuthenticatorTransportFuture[],
+    attestationType: SECURITY_CONFIG.webauthn.attestationType,
+    excludeCredentials: user.credentials.map(cred => ({
+      id: cred.credId, // Already a base64url string - NO conversion needed!
+      transports: cred.transports,
     })),
     authenticatorSelection: {
-      residentKey: 'preferred',
-      userVerification: 'preferred',
+      authenticatorAttachment: SECURITY_CONFIG.webauthn.authenticatorAttachment,
+      residentKey: SECURITY_CONFIG.webauthn.residentKey,
+      userVerification: SECURITY_CONFIG.webauthn.userVerification,
     },
-    supportedAlgorithmIDs: [-7, -257, -8],
-    timeout: 60000,
-  };
-  
-  return await generateRegistrationOptions(opts);
+    supportedAlgorithmIDs: SECURITY_CONFIG.webauthn.supportedAlgorithms,
+    timeout: SECURITY_CONFIG.webauthn.timeout,
+  });
 }
 
-// FIXED: Correct types for @simplewebauthn/server
-export async function generateAuthOptions(user: User | null, rpID: string) {
-  const opts: GenerateAuthenticationOptionsOpts = {
+export function generateAuthOptions(user: User | null, rpID: string) {
+  return generateAuthenticationOptions({
     rpID,
-    // FIXED: allowCredentials expects { id: string, transports?: AuthenticatorTransportFuture[] }
     allowCredentials: user ? user.credentials.map(cred => ({
-      id: cred.credId, // Already a string, no Buffer conversion needed
-      transports: cred.transports as AuthenticatorTransportFuture[],
+      id: cred.credId, // Already a base64url string - NO conversion needed!
+      transports: cred.transports,
     })) : undefined,
-    userVerification: 'preferred',
-    timeout: 60000,
-  };
-  
-  return await generateAuthenticationOptions(opts);
+    userVerification: SECURITY_CONFIG.webauthn.userVerification,
+    timeout: SECURITY_CONFIG.webauthn.timeout,
+  });
 }
 
-// Standardized registration verification
+// For backward compatibility
+export const generateRegOptionsJSON = generateRegOptions;
+export const generateAuthOptionsJSON = generateAuthOptions;
+
 export async function verifyRegResponse(response: any, expectedChallenge: string, expectedOrigin: string, expectedRPID: string) {
   console.log('[WebAuthn] Verifying registration:', { 
     expectedRPID, 
@@ -87,7 +78,7 @@ export async function verifyRegResponse(response: any, expectedChallenge: string
     expectedChallenge,
     expectedOrigin: [expectedOrigin],
     expectedRPID,
-    requireUserVerification: false,
+    requireUserVerification: SECURITY_CONFIG.webauthn.userVerification === 'required',
   });
 
   if (verification.verified && verification.registrationInfo) {
@@ -105,7 +96,8 @@ export async function verifyRegResponse(response: any, expectedChallenge: string
   return { verified: false } as const;
 }
 
-// Standardized authentication verification
+export const verifyRegResponseWrap = verifyRegResponse;
+
 export async function verifyAuthResponse(response: any, expectedChallenge: string, expectedOrigin: string, expectedRPID: string, credential: any) {
   console.log('[WebAuthn] Verifying auth:', { 
     expectedRPID, 
@@ -124,12 +116,11 @@ export async function verifyAuthResponse(response: any, expectedChallenge: strin
       counter: credential.counter,
       transports: credential.transports,
     },
-    requireUserVerification: false,
+    requireUserVerification: SECURITY_CONFIG.webauthn.userVerification === 'required',
   });
 
   if (verification.verified && verification.authenticationInfo) {
     const { newCounter } = verification.authenticationInfo;
-    // Log only; counters can be non-monotonic with multi-device passkeys
     if (newCounter > 0 && newCounter <= credential.counter) {
       console.warn('SECURITY_ALERT: Non-incrementing counter', { credId: credential.credId });
     }
@@ -138,8 +129,4 @@ export async function verifyAuthResponse(response: any, expectedChallenge: strin
   return { verified: false } as const;
 }
 
-// Backwards compatibility aliases
-export const generateRegOptionsJSON = generateRegOptions;
-export const generateAuthOptionsJSON = generateAuthOptions;
-export const verifyRegResponseWrap = verifyRegResponse;
 export const verifyAuthResponseWrap = verifyAuthResponse;

@@ -48,7 +48,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Authentication failed' }, { status: 400 });
     }
 
-    // Update credential counter and last used time
     credential.counter = verification.newCounter || credential.counter;
     credential.lastUsedAt = Date.now();
     await updateUser(user);

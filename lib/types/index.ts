@@ -1,10 +1,8 @@
-import type { AuthenticatorTransportFuture } from '@simplewebauthn/server';
-
 export interface Credential {
   credId: string;
   publicKey: string;
   counter: number;
-  transports?: AuthenticatorTransportFuture[];
+  transports?: any[]; // AuthenticatorTransportFuture[] but kept flexible
   credentialDeviceType?: string;
   credentialBackedUp?: boolean;
   aaguid?: string;
@@ -24,7 +22,7 @@ export interface Session {
   userId: string;
   email: string;
   createdAt: number;
-  expiresAt: number; // epoch ms
+  expiresAt: number;
 }
 
 export interface AuthCode {
