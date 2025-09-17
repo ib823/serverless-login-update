@@ -1,14 +1,28 @@
 export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { parse } from 'cookie';
-import { redis } from '@/lib/db/redis';
+import { deleteSession } from '@/lib/db/operations';
+import { serialize } from 'cookie';
 
-export async function POST(req: NextRequest) {
-  const cookies = req.headers.get('cookie') || '';
-  const { ['__Secure-session']: sid } = parse(cookies);
-  if (sid) await redis.del(`session:${sid}`);
-  return NextResponse.json({ ok: true }, {
-    headers: { 'Set-Cookie': '__Secure-session=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Strict' }
+export async function POST(request: NextRequest) {
+  const cookies = request.headers.get('cookie') || '';
+  const sessionId = cookies.split(';')
+    .find(c => c.trim().startsWith('__Secure-session='))
+    ?.split('=')[1];
+
+  if (sessionId) {
+    await deleteSession(sessionId);
+  }
+
+  const cookie = serialize('__Secure-session', '', {
+    httpOnly: true,
+    secure: true,
+    sameSite: 'strict',
+    path: '/',
+    maxAge: 0 // This will delete the cookie
+  });
+
+  return NextResponse.json({ success: true }, { 
+    headers: { 'Set-Cookie': cookie } 
   });
 }

@@ -21,47 +21,15 @@ export default function AccountPage() {
   }, []);
 
   const signOut = async () => {
-    // Add ripple effect
-    const btn = event?.target as HTMLElement;
-    if (btn) {
-      const rect = btn.getBoundingClientRect();
-      const ripple = document.createElement('span');
-      ripple.className = 'ripple';
-      ripple.style.left = '50%';
-      ripple.style.top = '50%';
-      btn.appendChild(ripple);
-      setTimeout(() => ripple.remove(), 600);
-    }
-    
     await fetch('/api/logout', { method: 'POST' });
-    setTimeout(() => window.location.replace('/auth'), 300);
-  };
-
-  const addDevice = () => {
-    // Add ripple effect
-    const btn = event?.target as HTMLElement;
-    if (btn) {
-      const rect = btn.getBoundingClientRect();
-      const ripple = document.createElement('span');
-      ripple.className = 'ripple';
-      ripple.style.left = '50%';
-      ripple.style.top = '50%';
-      btn.appendChild(ripple);
-      setTimeout(() => ripple.remove(), 600);
-    }
-    
-    setTimeout(() => window.location.href = '/auth', 300);
+    window.location.replace('/auth');
   };
 
   if (loading) {
     return (
       <div className="container">
         <div className="card">
-          <div className="loading-dots">
-            <span></span>
-            <span></span>
-            <span></span>
-          </div>
+          <div className="btn loading" style={{ border: 'none' }}>Loading...</div>
         </div>
       </div>
     );
@@ -70,25 +38,13 @@ export default function AccountPage() {
   return (
     <div className="container">
       <div className="card fade-in">
-        <div className="success-indicator"></div>
         <h1>Authenticated</h1>
         <p className="status">
           Signed in as <strong>{session?.email}</strong>
         </p>
         
-        <div className="actions">
-          <button 
-            className="btn secondary hover-lift" 
-            onClick={addDevice}
-            data-tooltip="Register this device for faster sign-in"
-          >
-            Add Device
-          </button>
-          <button 
-            className="btn hover-lift" 
-            onClick={signOut}
-            data-tooltip="Sign out from this device"
-          >
+        <div className="actions" style={{ marginTop: '2rem' }}>
+          <button className="btn" onClick={signOut}>
             Sign Out
           </button>
         </div>

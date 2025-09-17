@@ -1,22 +1,30 @@
 export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { redis } from '@/lib/db/redis';
-import { parse } from 'cookie';
+import { getSession } from '@/lib/db/operations';
 
-export async function GET(req: NextRequest) {
-  const cookies = req.headers.get('cookie') || '';
-  const { ['__Secure-session']: sid } = parse(cookies);
-  if (!sid) return NextResponse.json({ error: 'No session' }, { status: 401 });
+export async function GET(request: NextRequest) {
+  const cookies = request.headers.get('cookie') || '';
+  const sessionId = cookies.split(';')
+    .find(c => c.trim().startsWith('__Secure-session='))
+    ?.split('=')[1];
 
-  const data = await redis.get(`session:${sid}`);
-  if (!data) {
-    // expire client cookie as well
-    return NextResponse.json({ error: 'Session not found' }, {
-      status: 401,
-      headers: { 'Set-Cookie': '__Secure-session=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Strict' }
-    });
+  if (!sessionId) {
+    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
   }
-  const session = typeof data === 'string' ? JSON.parse(data) : data;
-  return NextResponse.json({ session });
+
+  const session = await getSession(sessionId);
+  
+  if (!session || session.expiresAt < Date.now()) {
+    return NextResponse.json({ error: 'Session expired' }, { status: 401 });
+  }
+
+  return NextResponse.json({ 
+    session: {
+      userId: session.userId,
+      email: session.email,
+      createdAt: session.createdAt,
+      expiresAt: session.expiresAt
+    }
+  });
 }

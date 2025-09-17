@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
-export default function AccountPage() {
+export default function HomePage() {
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
@@ -12,7 +12,10 @@ export default function AccountPage() {
         if (r.ok) {
           const data = await r.json();
           setSession(data.session);
+          // If authenticated, redirect to account
+          window.location.replace('/account');
         } else {
+          // If not authenticated, redirect to auth
           window.location.replace('/auth');
         }
       })
@@ -20,43 +23,15 @@ export default function AccountPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const signOut = async () => {
-    await fetch('/api/logout', { method: 'POST' });
-    window.location.replace('/auth');
-  };
-
-  const addDevice = () => {
-    // Force registration mode for adding new device
-    window.location.href = '/auth';
-  };
-
   if (loading) {
     return (
       <div className="container">
         <div className="card">
-          <div className="btn loading" style={{ border: 'none' }}></div>
+          <div className="btn loading" style={{ border: 'none' }}>Loading...</div>
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="container">
-      <div className="card fade-in">
-        <h1>Authenticated</h1>
-        <p className="status">
-          Signed in as <strong>{session?.email}</strong>
-        </p>
-        
-        <div className="actions">
-          <button className="btn secondary" onClick={addDevice}>
-            Add Device
-          </button>
-          <button className="btn" onClick={signOut}>
-            Sign Out
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+  return null; // This won't be seen as we redirect
 }
