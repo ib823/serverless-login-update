@@ -82,14 +82,14 @@ export default function AccountPage() {
             onClick={addDevice}
             data-tooltip="Register this device for faster sign-in"
           >
-            Add Device
+            ➕ Add Device
           </button>
           <button 
             className="btn hover-lift" 
             onClick={signOut}
             data-tooltip="Sign out from this device"
           >
-            Sign Out
+            Sign Out →
           </button>
         </div>
       </div>

@@ -243,6 +243,30 @@ h1 {
   position: relative;
 }
 
+.input-wrapper {
+  position: relative;
+}
+
+.input-wrapper::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  background: linear-gradient(45deg, transparent, var(--accent), transparent);
+  border-radius: var(--radius-md);
+  opacity: 0;
+  transition: opacity 0.3s;
+  z-index: -1;
+}
+
+.input-wrapper:focus-within::before {
+  opacity: 0.2;
+  animation: inputGlow 2s linear infinite;
+}
+
+@keyframes inputGlow {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
 
 .input {
   width: 100%;

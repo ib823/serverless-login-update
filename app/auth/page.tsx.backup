@@ -87,7 +87,7 @@ export default function AuthPage() {
 
         if (!verifyResp.ok) throw new Error('Registration failed');
         
-        setStatus({type: 'success', message: 'Success! Redirecting...'});
+        setStatus({type: 'success', message: '✨ Success! Redirecting...'});
         
         // Add success pulse
         const card = document.querySelector('.card');
@@ -110,7 +110,7 @@ export default function AuthPage() {
 
         if (!verifyResp.ok) throw new Error('Authentication failed');
         
-        setStatus({type: 'success', message: 'Welcome back! Redirecting...'});
+        setStatus({type: 'success', message: '✨ Welcome back! Redirecting...'});
         
         // Add success pulse
         const card = document.querySelector('.card');
@@ -131,13 +131,13 @@ export default function AuthPage() {
       }
       
       if (err.name === 'NotAllowedError') {
-        setStatus({type: 'error', message: 'Security key not available. Try another browser.'});
+        setStatus({type: 'error', message: '🔐 Security key not available. Try another browser.'});
       } else if (err.name === 'NotSupportedError') {
-        setStatus({type: 'error', message: 'This browser doesn\'t support passkeys.'});
+        setStatus({type: 'error', message: '⚠️ This browser doesn\'t support passkeys.'});
       } else if (err.message?.includes('Network')) {
-        setStatus({type: 'error', message: 'Connection failed. Please try again.'});
+        setStatus({type: 'error', message: '🌐 Connection failed. Please try again.'});
       } else {
-        setStatus({type: 'error', message: 'Authentication failed. Please try again.'});
+        setStatus({type: 'error', message: '❌ Authentication failed. Please try again.'});
       }
     }
   };
@@ -153,23 +153,25 @@ export default function AuthPage() {
         <p className="subtitle">Sign in securely with your passkey</p>
         
         <div className="form-group">
-          <input
-  ref={inputRef}
-  type="email"
-  className={`input ${status.type === 'error' ? 'error' : ''}`}
-  placeholder="Enter your email"
-  value={email}
-  onChange={(e) => {
-    setEmail(e.target.value);
-    if (status.type) setStatus({type: null, message: ''});
-  }}
-  onKeyPress={handleKeyPress}
-  disabled={loading}
-  autoComplete="username webauthn"
-  autoCapitalize="none"
-  autoCorrect="off"
-  spellCheck="false"
-/>
+          <div className="input-wrapper">
+            <input
+              ref={inputRef}
+              type="email"
+              className={`input ${status.type === 'error' ? 'error' : ''}`}
+              placeholder="Enter your email"
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                if (status.type) setStatus({type: null, message: ''});
+              }}
+              onKeyPress={handleKeyPress}
+              disabled={loading}
+              autoComplete="username webauthn"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck="false"
+            />
+          </div>
         </div>
         
         <button 
@@ -178,7 +180,7 @@ export default function AuthPage() {
           disabled={loading || !email.includes('@')}
           data-tooltip="Use your device's biometric or security key"
         >
-          {loading ? '' : 'Continue with Passkey'}
+          {loading ? '' : 'Continue with Passkey →'}
         </button>
 
         <div className={`status-message ${status.type ? 'active' : ''} ${status.type || ''}`}>
